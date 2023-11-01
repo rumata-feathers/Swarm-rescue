@@ -4,8 +4,10 @@ The Drone will move forward and turn for a random angle when an obstacle is hit
 """
 import math
 import random
+import time
+import statistics
 from typing import Optional
-
+import numpy as np
 from spg_overlay.entities.drone_abstract import DroneAbstract
 from spg_overlay.utils.misc_data import MiscData
 from spg_overlay.utils.utils import normalize_angle
@@ -31,25 +33,130 @@ class MyDroneRandom(DroneAbstract):
         """
         pass
 
-    def process_lidar_sensor(self):
+
+
+
+
+    def process_lidar_sensor(self, the_lidar_sensor):
+        command = {"forward": 0.5,
+                   "lateral": 0.0,
+                   "rotation": 0.0}
+        angular_vel_controller = 1.0
+
+        values = the_lidar_sensor.get_sensor_values()
+
+        if values is None:
+            return command, False
+
+        ray_angles = the_lidar_sensor.ray_angles
+        size = the_lidar_sensor.resolution
+        #print(size)
+        #print(ray_angles)
+        #time.sleep(100)
+        far_angle_raw = 0
+        near_angle_raw = 0
+        min_dist = 1000
+        if size != 0:
+            # far_angle_raw : angle with the longer distance
+            far_angle_raw = ray_angles[np.argmax(values)]
+            #print(far_angle_raw)
+            min_dist = min(values)
+            #print(min_dist)
+            #time.sleep(100)
+            # near_angle_raw : angle with the nearest distance
+            near_angle_raw = ray_angles[np.argmin(values)]
+            #print(near_angle_raw)
+            #time.sleep(100)
+
+        far_angle = far_angle_raw
+        # If far_angle_raw is small then far_angle = 0
+        if abs(far_angle) < 1 / 180 * np.pi:
+            far_angle = 0.0
+
+        near_angle = near_angle_raw
+        far_angle = normalize_angle(far_angle)
         """
-        Returns True if the drone collided an obstacle
-        """
-        if self.lidar_values() is None:
-            return False
+        # The drone will turn toward the zone with the more space ahead
+        if size != 0:
+            if far_angle > 0.3:
+                command["rotation"] = angular_vel_controller
+            elif far_angle > -0.3 and far_angle < 0.3:
+                command["rotation"] = 0
+            else:
+                command["rotation"] = angular_vel_controller
+"""
+        # If near a wall then 'collision' is True and the drone tries to turn its back to the wall
+        collision = False
+        if size != 0 and min_dist < 20:
+            collision = True
+            #if near_angle > 0:
+            #    command["rotation"] = angular_vel_controller
+            #else:
+            #    command["rotation"] = angular_vel_controller
 
-        collided = False
-        dist = min(self.lidar_values())
 
-        if dist < 40:
-            collided = True
 
-        return collided
+        wall_angle=near_angle_raw+self.measured_compass_angle()
+        if wall_angle > np.pi:
+            wall_angle = near_angle_raw - self.measured_compass_angle()
+        if wall_angle < -np.pi:
+            wall_angle = near_angle_raw - self.measured_compass_angle()
+
+        #print(near_angle_raw, self.measured_compass_angle(),-np.pi/2 , wall_angle)
+        if collision == False:
+            command = {"forward": 0.5,
+                        "lateral": 0.0,
+                        "rotation": 0.0,
+                        "grasper": 0.0}
+
+        # see if there is corner and try to turn right
+        print(statistics.mean([values[40], values[44]]), statistics.mean([values[46], values[50]]))
+        if (abs(statistics.mean([values[46], values[50]])-statistics.mean([values[40], values[44]]))>30):
+            command = {"forward": 0.2,
+                        "lateral": 0.0,
+                        "rotation": -0.2,
+                        "grasper": 0.0}
+
+
+        if wall_angle > np.pi/2 - 0.8 and wall_angle < np.pi/2 + 0.8:
+            #print("up",near_angle_raw, self.measured_compass_angle() , wall_angle)
+            if not ((self.measured_compass_angle() > np.pi - 0.05 and self.measured_compass_angle() < np.pi) or (self.measured_compass_angle() < -np.pi + 0.15 and self.measured_compass_angle() > -np.pi)):
+                #print("rotating_wall up")
+                command = {"forward": 0.0,
+                           "lateral": 0.0,
+                           "rotation": 0.2,
+                           "grasper": 0.0}
+            else:
+                collision=False
+        if (wall_angle > np.pi - 0.8 and wall_angle < np.pi) or (wall_angle < -np.pi + 0.8 and wall_angle > -np.pi):
+            #print("left",near_angle_raw, self.measured_compass_angle() , wall_angle)
+            if self.measured_compass_angle() > -np.pi/2 + 0.15 or self.measured_compass_angle() < -np.pi/2 - 0.05 :
+                #print("rotating_wall left")
+                command = {"forward": 0.0,
+                           "lateral": 0.0,
+                           "rotation": 0.2,
+                           "grasper": 0.0}
+            else:
+                collision=False
+
+        return command, collision
 
     def control(self):
         """
         The Drone will move forward and turn for a random angle when an obstacle is hit
         """
+
+        command, collided = self.process_lidar_sensor(self.lidar())
+        # if collided == False:
+        #     command = {"forward": 1.0,
+        #                 "lateral": 0.0,
+        #                 "rotation": 0.0,
+        #                 "grasper": 0.0}
+        # #else
+
+
+
+
         command_straight = {"forward": 1.0,
                             "lateral": 0.0,
                             "rotation": 0.0,
@@ -57,28 +164,43 @@ class MyDroneRandom(DroneAbstract):
 
         command_turn = {"forward": 0.0,
                         "lateral": 0.0,
-                        "rotation": 1.0,
+                        "rotation": 0.1,
                         "grasper": 0}
 
-        collided = self.process_lidar_sensor()
 
-        self.counterStraight += 1
 
-        if collided and not self.isTurning and self.counterStraight > self.distStopStraight:
-            self.isTurning = True
-            self.angleStopTurning = random.uniform(-math.pi, math.pi)
 
-        measured_angle = 0
+        #self.counterStraight += 1
+
+        #if collided and not self.isTurning and self.counterStraight > self.distStopStraight:
+         #   self.isTurning = True
+           # #self.angleStopTurning = random.uniform(-math.pi, math.pi)
+          #  self.angleStopTurning = self.angleStopTurning + 0.3
         if self.measured_compass_angle() is not None:
             measured_angle = self.measured_compass_angle()
-
-        diff_angle = normalize_angle(self.angleStopTurning - measured_angle)
-        if self.isTurning and abs(diff_angle) < 0.2:
+            #print(measured_angle)
+        if collided==True:
+            self.isTurning = True
+            #self.angleStopTurning = random.uniform(-math.pi, math.pi)
+            self.angleStopTurning = self.angleStopTurning + 0.1
+        if collided==False:
             self.isTurning = False
-            self.counterStraight = 0
-            self.distStopStraight = random.uniform(10, 50)
+        #print(collided)
 
-        if self.isTurning:
-            return command_turn
-        else:
-            return command_straight
+        # measured_angle = 0
+        # if self.measured_compass_angle() is not None:
+        #     measured_angle = self.measured_compass_angle()
+        #     print(measured_angle)
+        # diff_angle = normalize_angle(self.angleStopTurning - measured_angle)
+        # if self.isTurning and abs(diff_angle) < 0.2:
+        #     self.isTurning = False
+        #     self.counterStraight = 0
+        #     #self.distStopStraight = random.uniform(10, 50)
+
+        #if self.isTurning:
+        #    return command
+        #else:
+        #    return command_straight
+        #print(self.measured_compass_angle())
+        time.sleep(0.01)
+        return command
