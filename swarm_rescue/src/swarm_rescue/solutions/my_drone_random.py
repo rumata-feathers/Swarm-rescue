@@ -93,7 +93,7 @@ class MyDroneRandom(DroneAbstract):
             #    command["rotation"] = angular_vel_controller
             #else:
             #    command["rotation"] = angular_vel_controller
-
+        #print(min_dist)
 
 
         wall_angle=near_angle_raw+self.measured_compass_angle()
@@ -104,40 +104,71 @@ class MyDroneRandom(DroneAbstract):
 
         #print(near_angle_raw, self.measured_compass_angle(),-np.pi/2 , wall_angle)
         if collision == False:
-            command = {"forward": 0.5,
+            command = {"forward": 0.4,
                         "lateral": 0.0,
                         "rotation": 0.0,
                         "grasper": 0.0}
 
         # see if there is corner and try to turn right
-        print(statistics.mean([values[40], values[44]]), statistics.mean([values[46], values[50]]))
-        if (abs(statistics.mean([values[46], values[50]])-statistics.mean([values[40], values[44]]))>30):
+        #print(statistics.mean([values[37], values[43]]), statistics.mean([values[47], values[53]]))
+        if (statistics.mean([values[47], values[53]])-statistics.mean([values[37], values[43]])>10):
             command = {"forward": 0.2,
                         "lateral": 0.0,
-                        "rotation": -0.2,
+                        "rotation": -0.7,
                         "grasper": 0.0}
 
 
-        if wall_angle > np.pi/2 - 0.8 and wall_angle < np.pi/2 + 0.8:
+        if wall_angle > np.pi/2 - 0.4 and wall_angle < np.pi/2 + 0.4 and min_dist < 40:
             #print("up",near_angle_raw, self.measured_compass_angle() , wall_angle)
-            if not ((self.measured_compass_angle() > np.pi - 0.05 and self.measured_compass_angle() < np.pi) or (self.measured_compass_angle() < -np.pi + 0.15 and self.measured_compass_angle() > -np.pi)):
+            print("sverhu",wall_angle)
+            if not ((self.measured_compass_angle() > np.pi - 0.05 and self.measured_compass_angle() < np.pi) or (self.measured_compass_angle() < -np.pi + 0.2 and self.measured_compass_angle() > -np.pi)):
                 #print("rotating_wall up")
-                command = {"forward": 0.0,
+                command = {"forward": 0.05,
                            "lateral": 0.0,
-                           "rotation": 0.2,
+                           "rotation": 0.6,
                            "grasper": 0.0}
             else:
                 collision=False
-        if (wall_angle > np.pi - 0.8 and wall_angle < np.pi) or (wall_angle < -np.pi + 0.8 and wall_angle > -np.pi):
+        if ((wall_angle > np.pi - 0.4 and wall_angle < np.pi) or (wall_angle < -np.pi + 0.4 and wall_angle > -np.pi))  and min_dist < 40:
             #print("left",near_angle_raw, self.measured_compass_angle() , wall_angle)
-            if self.measured_compass_angle() > -np.pi/2 + 0.15 or self.measured_compass_angle() < -np.pi/2 - 0.05 :
+            print("sleva",wall_angle)
+            if self.measured_compass_angle() > -np.pi/2 + 0.2 or self.measured_compass_angle() < -np.pi/2 - 0.05 :
                 #print("rotating_wall left")
-                command = {"forward": 0.0,
+                command = {"forward": 0.05,
                            "lateral": 0.0,
-                           "rotation": 0.2,
+                           "rotation": 0.6,
                            "grasper": 0.0}
             else:
                 collision=False
+        if wall_angle > -np.pi/2 - 0.4 and wall_angle < -np.pi/2 + 0.4 and min_dist < 40:
+            print("vnizu",wall_angle)
+            if self.measured_compass_angle() > 0.2 or self.measured_compass_angle() < -0.05:
+                command = {"forward": 0.05,
+                           "lateral": 0.0,
+                           "rotation": 0.6,
+                           "grasper": 0.0}
+            else:
+                collision=False
+
+
+        """ THIS PART DOESNT WORK BECAUSE I CALCULATE WALL_ANGEL INCORRECT
+        if wall_angle > - 0.4 and wall_angle < + 0.4 and min_dist < 40:
+            print("sprava")
+            if self.measured_compass_angle() > np.pi/2 + 0.2 or self.measured_compass_angle() < np.pi/2 - 0.05:
+                command = {"forward": 0.05,
+                           "lateral": 0.0,
+                           "rotation": 0.6,
+                           "grasper": 0.0}
+            else:
+                collision=False
+                
+        """
+       
+        if (statistics.mean([values[43], values[47]])<30):
+            command = {"forward": 0.0,
+                        "lateral": 0.5,
+                        "rotation": 0.0,
+                        "grasper": 0.0}
 
         return command, collision
 
@@ -202,5 +233,5 @@ class MyDroneRandom(DroneAbstract):
         #else:
         #    return command_straight
         #print(self.measured_compass_angle())
-        time.sleep(0.01)
+        #time.sleep(0.1)
         return command
